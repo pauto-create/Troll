@@ -1,57 +1,78 @@
 import os
 import re
+import sys
 
-def chunk_html(input_file):
+def extract_elements(content, selector):
+    """Extract elements based on selector type:
+    - For IDs: #my-id
+    - For classes: .my-class
+    - For tags: div, section, etc.
+    """
+    if selector.startswith('#'):
+        # ID selector
+        pattern = f'(<[^>]+id=[\'"]{selector[1:]}[\'"][^>]*>.*?</[^>]+>)'
+    elif selector.startswith('.'):
+        # Class selector
+        pattern = f'(<[^>]+class=[\'"][^\'"]*{selector[1:]}[^\'"]*[\'"][^>]*>.*?</[^>]+>)'
+    else:
+        # Tag selector
+        pattern = f'(<{selector}[^>]*>.*?</{selector}>)'
+    
+    matches = re.findall(pattern, content, re.DOTALL | re.IGNORECASE)
+    return matches
+
+def chunk_html(input_file, selector):
     # Create chunks directory if it doesn't exist
     if not os.path.exists('chunk'):
         os.makedirs('chunk')
-
+    
     # Read the HTML file
     with open(input_file, 'r', encoding='utf-8') as f:
         content = f.read()
+    
+    # Extract matching elements
+    matches = extract_elements(content, selector)
+    
+    if not matches:
+        print(f"No elements found matching '{selector}'")
+        return
+    
+    # Save the original file path for reassembly
+    with open('chunk/original_file.txt', 'w', encoding='utf-8') as f:
+        f.write(input_file)
+    
+    # Save the selector used
+    with open('chunk/selector.txt', 'w', encoding='utf-8') as f:
+        f.write(selector)
+    
+    # Save the full content for reassembly
+    with open('chunk/full_content.html', 'w', encoding='utf-8') as f:
+        f.write(content)
+    
+    # Save each matching element as a separate chunk
+    for i, match in enumerate(matches, 1):
+        with open(f'chunk/{i:02d}_match.html', 'w', encoding='utf-8') as f:
+            f.write(match)
+        print(f"Saved match {i} to chunk/{i:02d}_match.html")
 
-    # Split into head and body sections
-    head_match = re.search(r'(<head.*?>.*?</head>)', content, re.DOTALL | re.IGNORECASE)
-    body_match = re.search(r'(<body.*?>)(.*?)(</body>)', content, re.DOTALL | re.IGNORECASE)
+def print_help():
+    print("""
+Usage: python chunk_html.py <input_file> <selector>
 
-    if head_match:
-        # Save header section
-        with open('chunk/00_header.html', 'w', encoding='utf-8') as f:
-            doctype = '<!DOCTYPE html>\n' if '<!DOCTYPE' in content else ''
-            html_start = '<html>\n' if '<html' in content else ''
-            f.write(doctype + html_start + head_match.group(1))
+Selectors:
+- For IDs: #my-id
+- For classes: .my-class
+- For tags: div, section, p, etc.
 
-    if body_match:
-        # Save body start tag
-        with open('chunk/body_start.html', 'w', encoding='utf-8') as f:
-            f.write(body_match.group(1))
-
-        # Split body content into chunks based on major elements
-        body_content = body_match.group(2)
-        chunks = re.findall(r'(<(?:div|section|article|header|footer|nav|main|aside).*?>.*?</(?:div|section|article|header|footer|nav|main|aside)>)', body_content, re.DOTALL)
-        
-        # Save each chunk
-        for i, chunk in enumerate(chunks, 1):
-            with open(f'chunk/{i:02d}_content.html', 'w', encoding='utf-8') as f:
-                f.write(chunk)
-
-        # Save remaining content that wasn't caught in chunks
-        remaining = body_content
-        for chunk in chunks:
-            remaining = remaining.replace(chunk, '')
-        if remaining.strip():
-            with open(f'chunk/{len(chunks)+1:02d}_content.html', 'w', encoding='utf-8') as f:
-                f.write(remaining)
-
-        # Save body end
-        with open('chunk/body_end.html', 'w', encoding='utf-8') as f:
-            f.write(body_match.group(3) + '\n</html>')
+Examples:
+python chunk_html.py index.html .main-content
+python chunk_html.py index.html #header
+python chunk_html.py index.html article
+    """)
 
 if __name__ == '__main__':
-    import sys
-    if len(sys.argv) != 2:
-        print("Usage: python chunk_html.py <input_html_file>")
+    if len(sys.argv) != 3:
+        print_help()
         sys.exit(1)
     
-    chunk_html(sys.argv[1])
-    print("HTML file has been split into chunks in the 'chunk' directory")
+    chunk_html(sys.argv[1], sys.argv[2])
