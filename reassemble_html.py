@@ -1,31 +1,42 @@
 import os
-import glob
 
-def reassemble_file(filename):
-    """Reassembles a chunked file."""
+def reassemble_html(output_file):
+    # Get all files in chunk directory
+    chunk_files = os.listdir('chunk')
+    
+    # Initialize the reassembled content
+    content = []
+    
+    # Add header first
+    if '00_header.html' in chunk_files:
+        with open('chunk/00_header.html', 'r', encoding='utf-8') as f:
+            content.append(f.read())
+    
+    # Add body start
+    if 'body_start.html' in chunk_files:
+        with open('chunk/body_start.html', 'r', encoding='utf-8') as f:
+            content.append(f.read())
+    
+    # Add all content chunks in order
+    content_files = sorted([f for f in chunk_files if f.endswith('_content.html')])
+    for file in content_files:
+        with open(f'chunk/{file}', 'r', encoding='utf-8') as f:
+            content.append(f.read())
+    
+    # Add body end
+    if 'body_end.html' in chunk_files:
+        with open('chunk/body_end.html', 'r', encoding='utf-8') as f:
+            content.append(f.read())
+    
+    # Write the reassembled content to the output file
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(content))
 
-    parts = sorted(glob.glob(f"{filename}.part*"))
-
-    if not parts:
-        print(f"Error: No parts found for '{filename}'.")
-        return
-
-    reassembled_content = ""
-    for part_file in parts:
-        try:
-            with open(part_file, 'r', encoding='utf-8') as infile:
-                reassembled_content += infile.read()
-        except FileNotFoundError:
-            print(f"Error: Part file '{part_file}' not found.")
-            return
-
-    with open(filename, 'w', encoding='utf-8') as outfile:
-        outfile.write(reassembled_content)
-
-    print(f"File '{filename}' reassembled from {len(parts)} parts.")
-
-
-if __name__ == "__main__":
-    filename = "index.html"  # Replace with the actual filename
-    reassemble_file(filename)
-
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) != 2:
+        print("Usage: python reassemble_html.py <output_html_file>")
+        sys.exit(1)
+    
+    reassemble_html(sys.argv[1])
+    print(f"HTML chunks have been reassembled into {sys.argv[1]}")

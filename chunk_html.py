@@ -1,30 +1,57 @@
 import os
+import re
 
-def chunk_file(filename, chunk_size=1000):
-    """Chunks a file into smaller parts."""
+def chunk_html(input_file):
+    # Create chunks directory if it doesn't exist
+    if not os.path.exists('chunk'):
+        os.makedirs('chunk')
 
-    if not os.path.exists(filename):
-        print(f"Error: File '{filename}' not found.")
-        return
-
-    with open(filename, 'r', encoding='utf-8') as f:
+    # Read the HTML file
+    with open(input_file, 'r', encoding='utf-8') as f:
         content = f.read()
 
-    chunks = []
-    for i in range(0, len(content), chunk_size):
-        chunk = content[i:i + chunk_size]
-        chunks.append(chunk)
+    # Split into head and body sections
+    head_match = re.search(r'(<head.*?>.*?</head>)', content, re.DOTALL | re.IGNORECASE)
+    body_match = re.search(r'(<body.*?>)(.*?)(</body>)', content, re.DOTALL | re.IGNORECASE)
 
-    for i, chunk in enumerate(chunks):
-        chunk_filename = f"{filename}.part{i+1}"
-        with open(chunk_filename, 'w', encoding='utf-8') as outfile:
-            outfile.write(chunk)
+    if head_match:
+        # Save header section
+        with open('chunk/00_header.html', 'w', encoding='utf-8') as f:
+            doctype = '<!DOCTYPE html>\n' if '<!DOCTYPE' in content else ''
+            html_start = '<html>\n' if '<html' in content else ''
+            f.write(doctype + html_start + head_match.group(1))
 
-    print(f"File '{filename}' chunked into {len(chunks)} parts.")
+    if body_match:
+        # Save body start tag
+        with open('chunk/body_start.html', 'w', encoding='utf-8') as f:
+            f.write(body_match.group(1))
 
+        # Split body content into chunks based on major elements
+        body_content = body_match.group(2)
+        chunks = re.findall(r'(<(?:div|section|article|header|footer|nav|main|aside).*?>.*?</(?:div|section|article|header|footer|nav|main|aside)>)', body_content, re.DOTALL)
+        
+        # Save each chunk
+        for i, chunk in enumerate(chunks, 1):
+            with open(f'chunk/{i:02d}_content.html', 'w', encoding='utf-8') as f:
+                f.write(chunk)
 
-if __name__ == "__main__":
-    filename = "index.html"  # Replace with the actual filename
-    chunk_size = 10000       # Adjust chunk size as needed (characters)
-    chunk_file(filename, chunk_size)
+        # Save remaining content that wasn't caught in chunks
+        remaining = body_content
+        for chunk in chunks:
+            remaining = remaining.replace(chunk, '')
+        if remaining.strip():
+            with open(f'chunk/{len(chunks)+1:02d}_content.html', 'w', encoding='utf-8') as f:
+                f.write(remaining)
 
+        # Save body end
+        with open('chunk/body_end.html', 'w', encoding='utf-8') as f:
+            f.write(body_match.group(3) + '\n</html>')
+
+if __name__ == '__main__':
+    import sys
+    if len(sys.argv) != 2:
+        print("Usage: python chunk_html.py <input_html_file>")
+        sys.exit(1)
+    
+    chunk_html(sys.argv[1])
+    print("HTML file has been split into chunks in the 'chunk' directory")
